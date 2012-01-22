@@ -1,0 +1,59 @@
+/* CSS styles used in example HTML. */
+.hidden {
+	display: none;
+}
+
+div.blogExample {
+	border: thin #006 dotted;
+	font-family: sans-serif;
+	padding: 10px;
+	margin: 10px 0;
+}
+
+div.blogExample a {
+	color: #006;
+}
+
+div.blogExample a:visited {
+	color: #333;
+}
+
+div.blogExample h1 {
+	font-size: 14px;
+}
+
+div.blogExample h2 {
+	font-size: 12px;
+}
+
+div.controlBlock {
+	display: inline-block;
+	border: thin #006 solid;
+	padding: 10px;
+	margin: 10px;
+}
+
+div.controlBlock button.selected {
+	background-color: gray;
+}
+
+div.itemList {
+	width: 100%;
+}
+
+div.itemList p {
+	display: inline-block;
+	width: 25%;
+	margin: 10px;
+	padding: 10px;
+	background-color: #336633;
+	color: white;
+}
+
+div.itemList p.bold {
+	font-weight: bold;
+}
+
+div.itemList p.italic {
+	font-style: italic;
+}
