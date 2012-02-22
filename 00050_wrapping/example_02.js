@@ -31,7 +31,7 @@
 			event.preventDefault();
 
 			// simulate successful login after talking to server
-			$(this).parent().html("logging in");
+			$(this).parent().html("logging in...");
 			_(function() {
 				authenticated = true;
 				$loginForm.trigger("success");
