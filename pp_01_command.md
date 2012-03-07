@@ -1,47 +1,75 @@
 # How We Added Time Travel to Paperless Post
 
-The card creation system at Paperless post is meant to enable painstaking
-customization, within the templates our design team generates. Over and over,
-we've seen our users turn out fine-tuned cards that stretch the limits of the
-design system. They experiment, they tweak, they twiddle, and they turn out
-card, from the artistic to the bizarre, that we as programmers could never have
-anticipated. We recognize this as a major strength of our site, and so editing
-features have always been a priority. At length, after withstanding a huge
-holiday rush, we had breathing room to tackle a major new editing feature: a
-fully reversible undo history.
+Our designers make our cards beautiful, but our users make them unique. To help
+them, we've built a card editing tool that allows extensive customization. And
+customize they do: over and over, we've seen our users stretch the limits of the
+design system. In fact, we've seen them stretch it, bend it, twist it, crush it,
+and sometimes even break it -- as our customer support team can attest. They
+experiment, they tweak, they twiddle, and they turn out cards, from the artistic
+to the bizarre, that we as designers and programmers could never have
+anticipated. This is a major strength of our site, even when our customers'
+creativity fills up the bug tracker, and so editing features have always been a
+priority. In the past few months, after withstanding a huge holiday rush, we had
+breathing room to tackle a major new editing feature: a fully reversible undo
+history.
 
 ## The History of History
 
-We have not spent the last three years ignoring this need, of course. Undo
-history has been in the app, off and on, in various forms, for a long time. For
-instance, until recently, text input could be undone with Ctrl-Z, although it
-wasn't redoable. We switched from per-character undo to batched input undo over
-the summer, with a little help from the `_.debounce` feature of
+We have not been sleeping for the last three years, of course. Undo history has
+been in the app, off and on, in various forms, for a long time. Until recently,
+text input could be undone with Ctrl-Z, although it wasn't redoable. We switched
+from per-character undo to batched input undo over the summer, with a little
+help from the `_.debounce` feature of
 [underscore.as](http://www.github.com/amacdougall/underscore.as).
 
 Meanwhile, on the Javascript side of the application, we had a state-based undo
-system... and that split between undo systems is emblematic of one of the key
-design decisions behind the card creation app. In early summer, we switched over
-from our original pure-Flash card creation app to a new approach we call "the
-hybrid": a Javascript UI wrapping a Flash viewport. Visually, Javascript handles
-all the HTML controls outside the viewport, while the viewport renders the card
-and handles UI interaction that happens within it, such as dragging a photo.
-More importantly, our Javascript code can be said to drive the app: it has
-modules which interact with the server to maintain a canonical card state, and
-it relays that state to Flash as needed. In turn, it interprets events from
-Flash and updates the server when necessary. Between the two sides, there is a
-great deal of local communication, with Javascript taking the commanding role;
-and data is only synced to the server when needed.
+system, which handled every other kind of user action. Two undo systems -- odd,
+but emblematic of one of the key design decisions behind the card creation app.
+
+### The Hybrid
+
+Early in the summer of 2011, we switched over from our original pure-Flash card
+creation app to a new approach we call "the hybrid": a Javascript UI wrapping a
+Flash viewport. Visually, Javascript handles all the HTML controls outside the
+viewport, while the Flash viewport renders the card and handles UI interaction
+that happens within it, such as dragging a photo. More importantly, our
+Javascript code can be said to drive the app: it has modules which interact with
+the server to maintain a canonical card state, and it relays that state to Flash
+as needed. In turn, it interprets events from Flash and updates the server when
+necessary. The two sides sync constantly, since local communication is cheap;
+but Javascript hits the server only when necessary.
 
 Our goal for this separation was to permit advanced Flash rendering techniques
 such as fast photo filters and high-quality fonts, while doing most UI elements
-in HTML. Javascript, HAML, and Sass make UI updates a snap. When implementing an
-undo history, however, having two codebases on two runtimes makes life harder.
+in HTML. Javascript, HAML, and Sass make UI updates a snap. What's more, we can
+easily replace the Flash viewport with a pure HTML5 solution where
+appropriate... but that's another blog post.
+
+### State Snapshots
+
+When implementing an undo history, having two codebases on two runtimes
+makes life harder. Crucial state is split across runtimes. Even though
+Javascript is the canonical source of model data on the client side, plenty of
+other state is segregated, including things you might not think of as "state":
+object references, event handlers, the starting values of in-progress slider
+interactions.
+
+When we first tried to implement an undo history, we assumed these issues could
+be brushed aside. We need to restore object references and event handlers upon
+undoing a delete? Recreate them! We need to get a delta (a single change amount)
+from a slider drag (dozens and dozens of little events)? Assign the drag a
+transaction id! Javascript should be the sole source of _all_ app data, not just
+raw model information, and so we should be able to revert to any previous state
+by loading a snapshot we've stored as a JSON string.
+
+This worked pretty well, in fact. # TODO: further explanation
 
 Although our whole-app-state-based history system was promising, and although
 its outstanding bugs could have been resolved, we knew we wanted a much more
 incremental and flexible approach. Instead of serializing the entire app state
 on every user action, why not store only the relevant delta?
+
+### Design Patterns to the Rescue
 
 After some internal discussion, we settled on the classic undo implementation:
 the Command pattern. I first used the Command pattern in Java land, and although
