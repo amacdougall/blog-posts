@@ -10,7 +10,7 @@ features have always been a priority. At length, after withstanding a huge
 holiday rush, we had breathing room to tackle a major new editing feature: a
 fully reversible undo history.
 
-## Earlier Attempts
+## The History of History
 
 We have not spent the last three years ignoring this need, of course. Undo
 history has been in the app, off and on, in various forms, for a long time. For
@@ -52,7 +52,7 @@ however, I realized that Javascript and its more straitlaced cousin Actionscript
 3 were well-suited to the pattern -- considerably more so than Java and C++,
 where the pattern accumulated its original mindshare.
 
-## Basics of the Command Pattern
+## Commands for Controls
 
 There are two immediate motivations for the pattern in UI programming. One is to
 attach a single procedure to multiple UI elements -- a menu item, a toolbar
@@ -106,7 +106,9 @@ Javascript, where we don't even need to make a class:
         }
     };
 
-## Storing Historical State
+## Making Dumb Commands Smarter
+
+_"It's like undo is smarter than do" --overheard on Campfire_
 
 Of course, in this example, we assume that `releaseTheHounds` and
 `deployDogCatcher` are global functions that take no parameters. In any real
@@ -185,14 +187,14 @@ good grasp of function scope and closure mechanics, which should be natural for
 any Javascript programmer these days, the simplicity stays even when you're
 storing complex objects in those closures.
 
-## Recording, Rewinding, and Replaying History
+## Undo, Redo, Unredo, Reunredo, and Unreunredo
 
-TODO: improve and condense this section
+TODO: expand upon record/rewind/replay aspect, condense two-runtime dilemma
 
 Javascript and Actionscript make it easy to create a command object along with
-all its state. The history of the app state -- assumign it is entirely
+all its state. The history of the app state -- assuming it is entirely
 user-driven, or that a user-driven component can easily be separated -- can be
-exprssed simple as a linked chain of command. The obvious and correct approach
+expressed simply as a linked chain of commands. The obvious and correct approach
 is to embody history as an array, which is used as a stack: push an executed
 command, pop a command in order to undo it. Push undone commands onto a redo
 stack; pop those commands one by one to replay history, pushing each redone
@@ -205,9 +207,10 @@ when an action originates within Flash, such as a photo drag or text input, this
 approach is ineffective. For simple updates, such as a photo's position, perhaps
 it would be sufficient to send JS a model update; but more complex actions, such
 as text input, must be stored as commands holding sophisticated state such as
-text patches and formatting object fragments. The goal of applying only deltas,
-right? And sending patch or fragmentary format data to JS would add complexity
-we don't need.
+text patches and formatting object fragments. We have the goal of applying only
+deltas, right? And sending patch or fragmentary format data to JS would add
+complexity we don't need, since we'd need code on the JS side to incorporate
+fragmentary data into the model.
 
 My second thought was to give each runtime its own history, with special
 commands used to hand over control of the undo and redo buttons -- literally
@@ -218,4 +221,65 @@ debugging power of a notepad!)
 
 ## Main and Subordinate Command Stores
 
+Javascript was already the canonical source of model information on the client
+side, the anointed speaker to the database. It made perfect sense to canonize
+its command store as well, making it the sole keeper of application history.
+At the same time, we wanted to handle Flash commands within Flash: a photo
+resize, for instance, involves factors Javascript should not be aware of, such
+as the boundary contraints which keep an image in its frame during resizing.
+User actions performed entirely within Flash should be undone _by_ Flash, even
+though Javascript knows the score and calls the tune.
 
+The solution was simple: keep two command stores. On the Javascript side, the
+twin undo and redo stacks; on the Flash side, a hash of commands. Commands
+originating in Flash now do this:
+
+1. User performs action.
+1. Flash creates a command which can undo/redo the action.
+1. Flash calls `historyUpdate` on Javascript, passing the command as an
+   argument.
+1. Javascript creates a command which calls `undo(uuid)` and `redo(uuid)` on Flash.
+1. Javascript assigns a new uuid to that command.
+1. Javascript adds the command to its undo stack.
+1. Javascript returns the uuid to Flash; we were still executing
+   `historyUpdate`.
+1. Flash sets the uuid on the command object.
+1. Flash stores the command in its own command hash, keyed by uuid.
+
+In effect, Javascript maintains the entire command history, but some of the
+commands delegate directly to commands on the Flash side. Flash stores the
+commands as an unordered hash, relying upon Javascript to maintain the sequence.
+
+## Breaking with the Past
+
+Sometimes we need to "break" history: destroy some of our stored commands and
+start over. Any time the user performs a new action, for instance, our redo
+stack must be cast into the void. Your application might have actions that
+cannot be undone; when the user opens that door, her history shatters. Depending
+on your application's demands, executing a history break can be complex: you
+need to purge those commands, make them all available for garbage collection,
+and along with them, any object references and event listeners that might still
+hold some obscure yet tenacious tie to the outer world. Orphaned event listeners
+are like samurai ghosts, locked in this world past their time, forever waiting
+to fulfill an obligation that does not come.
+
+And sometimes, adding history will break your app. If you design with the naive
+assumption that time travels in only one direction, you will paint yourself into
+a corner. Adding undo history to our application was not just a matter of
+wrapping UI handlers in command generators. Every one-way state transition had
+to become reversible; every act of creation had to be coupled with an act of
+destruction. But by the same token, no object could be deleted without provision
+for its recovery. In the end, we touched nearly every aspect of the application
+to implement an undo history, and turned up dozens of new and interesting bugs
+in the process. If you're writing a new app that might benefit from undo/redo, I
+strongly advise building it in at the start.
+
+## The Future of History
+
+Undo/redo is in the final stages of development as I write this; QA and bugfixes
+are starting up. We hope to roll the feature out to beta users this spring, and
+to all users not long after; but development won't be over then. Undo history is
+an ongoing commitment: every new feature has to tie into the system, and every
+change to the application can alter the resource usage of the command stacks.
+But it will be worth it. Undo history is hard to get right, but it's a huge
+usability improvement our card senders will notice and appreciate.
