@@ -1,3 +1,5 @@
+# How We Added Time Travel to Paperless Post
+
 The card creation system at Paperless post is meant to enable painstaking
 customization, within the templates our design team generates. Over and over,
 we've seen our users turn out fine-tuned cards that stretch the limits of the
@@ -7,6 +9,8 @@ anticipated. We recognize this as a major strength of our site, and so editing
 features have always been a priority. At length, after withstanding a huge
 holiday rush, we had breathing room to tackle a major new editing feature: a
 fully reversible undo history.
+
+## Earlier Attempts
 
 We have not spent the last three years ignoring this need, of course. Undo
 history has been in the app, off and on, in various forms, for a long time. For
@@ -20,7 +24,7 @@ system... and that split between undo systems is emblematic of one of the key
 design decisions behind the card creation app. In early summer, we switched over
 from our original pure-Flash card creation app to a new approach we call "the
 hybrid": a Javascript UI wrapping a Flash viewport. Visually, Javascript handles
-all the HTML controls outside the viewport; while the viewport renders the card
+all the HTML controls outside the viewport, while the viewport renders the card
 and handles UI interaction that happens within it, such as dragging a photo.
 More importantly, our Javascript code can be said to drive the app: it has
 modules which interact with the server to maintain a canonical card state, and
@@ -29,12 +33,12 @@ Flash and updates the server when necessary. Between the two sides, there is a
 great deal of local communication, with Javascript taking the commanding role;
 and data is only synced to the server when needed.
 
-Our design objective was to permit advanced Flash rendering techniques such as
-fast photo filters and high-quality fonts, while doing most UI elements in HTML.
-Javascript, HAML, and Sass make UI updates a snap. When implementing an undo
-history, however, bridging two codebases on two runtimes presents issues!
+Our goal for this separation was to permit advanced Flash rendering techniques
+such as fast photo filters and high-quality fonts, while doing most UI elements
+in HTML. Javascript, HAML, and Sass make UI updates a snap. When implementing an
+undo history, however, having two codebases on two runtimes makes life harder.
 
-Although our whole-app-state-based history system worked, mostly, and although
+Although our whole-app-state-based history system was promising, and although
 its outstanding bugs could have been resolved, we knew we wanted a much more
 incremental and flexible approach. Instead of serializing the entire app state
 on every user action, why not store only the relevant delta?
@@ -47,19 +51,6 @@ of the state necessary to reverse and repeat the action. As I thought about it,
 however, I realized that Javascript and its more straitlaced cousin Actionscript
 3 were well-suited to the pattern -- considerably more so than Java and C++,
 where the pattern accumulated its original mindshare.
-
-## Basics of the Command Pattern
-
-There are two immediate motivations for the pattern in UI programming. One is to
-attach a single procedure to multiple UI elements -- a menu item, a toolbar
-button, and a keyboard shortcut, for example -- with more flexibility, such as I
-first used the Command pattern in Java land, and although I respected its power,
-I dreaded the tedium of defining customized command classes, potentially one for
-every possible user action, each containing copies of the state necessary to
-reverse and repeat the action. As I thought about it, however, I realized that
-Javascript and its more straitlaced cousin Actionscript 3 were well-suited to
-the pattern -- considerably more so than Java and C++, where the pattern
-accumulated its original mindshare.
 
 ## Basics of the Command Pattern
 
@@ -78,12 +69,12 @@ snapshots of the entire state of your app.
 
 Both approaches can be effective. An array of simple action codes such as
 "element 123abc color = #ff0000", or more computer-readable data objects such as
-`{targetID: "123abc", property: "color", value: 0xff0000}`, will work for a long
-time, especially if you write a simple interpreter for such commands. But once
-you need to undelete a complex object, your undelete command must suddenly
-contain all the commands necessary to rebuild the object from scratch; or you
-begin to cache deleted objects for potential resurrection, and must perforce
-remember to purge them on history break.
+`{targetID: "123abc", action: "move", x: 120, y: 0}`, will work for a long time,
+especially if you write a simple interpreter for such commands. But once you
+need to undelete a complex object, your undelete command must suddenly contain
+all the commands necessary to rebuild the object from scratch; or you begin to
+cache deleted objects for potential resurrection, and must perforce remember to
+purge them when discarding a history branch.
 
 Keeping a snapshot of the whole state is simple enough, as long as your model is
 amenable to serialization in the first place. But unless you're restoring a
@@ -114,6 +105,8 @@ Javascript, where we don't even need to make a class:
             deployDogCatcher();
         }
     };
+
+## Storing Historical State
 
 Of course, in this example, we assume that `releaseTheHounds` and
 `deployDogCatcher` are global functions that take no parameters. In any real
@@ -158,7 +151,7 @@ This subclass is simple, but as you start doing more complicated things,
 subclasses proliferate. Such a system can quickly get out of hand. There are
 many tricks to manage that complexity, but once you start using extra patterns
 or even full-fledged frameworks, well, ["now you have two
-problems."](http://regex.info/blog/2006-09-15/247).
+problems"](http://regex.info/blog/2006-09-15/247).
 
 Javascript and Actionscript 3 sidestep the whole issue. Functions in those
 languages are _closures_, which means that they retain references to everything
@@ -191,5 +184,38 @@ happen to run. Already you can see a gain in simplicity. As long as you have a
 good grasp of function scope and closure mechanics, which should be natural for
 any Javascript programmer these days, the simplicity stays even when you're
 storing complex objects in those closures.
+
+## Recording, Rewinding, and Replaying History
+
+TODO: improve and condense this section
+
+Javascript and Actionscript make it easy to create a command object along with
+all its state. The history of the app state -- assumign it is entirely
+user-driven, or that a user-driven component can easily be separated -- can be
+exprssed simple as a linked chain of command. The obvious and correct approach
+is to embody history as an array, which is used as a stack: push an executed
+command, pop a command in order to undo it. Push undone commands onto a redo
+stack; pop those commands one by one to replay history, pushing each redone
+command onto the undo stack.
+
+This is obvious and correct... until you start dealing with the two codebases,
+two runtimes. That's when things get trickier. A lot of interactions involve JS
+simply sending model updates to the Flash viewport, which duly renders them; but
+when an action originates within Flash, such as a photo drag or text input, this
+approach is ineffective. For simple updates, such as a photo's position, perhaps
+it would be sufficient to send JS a model update; but more complex actions, such
+as text input, must be stored as commands holding sophisticated state such as
+text patches and formatting object fragments. The goal of applying only deltas,
+right? And sending patch or fragmentary format data to JS would add complexity
+we don't need.
+
+My second thought was to give each runtime its own history, with special
+commands used to hand over control of the undo and redo buttons -- literally
+swapping event handlers, actually, depending on which runtime was "up" to undo
+the next command. This quickly led to the approach I actually used. (Note: I
+didn't write code for bad approaches, just notes. Never underestimate the
+debugging power of a notepad!)
+
+## Main and Subordinate Command Stores
 
 
