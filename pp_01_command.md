@@ -62,23 +62,23 @@ transaction id! Javascript should be the sole source of _all_ app data, not just
 raw model information, and so we should be able to revert to any previous state
 by loading a snapshot we've stored as a JSON string.
 
-This worked pretty well, in fact. # TODO: further explanation
-
-Although our whole-app-state-based history system was promising, and although
-its outstanding bugs could have been resolved, we knew we wanted a much more
-incremental and flexible approach. Instead of serializing the entire app state
-on every user action, why not store only the relevant delta?
+This worked pretty well, in fact. Many actions could be undone just by piping
+model updates from Javascript to Flash. But although this system showed promise,
+and its outstanding bugs could have been resolved, we knew we wanted a much more
+incremental and flexible approach. Instead of serializing the entire application
+state on every user action, why not store only the relevant delta?
 
 ### Design Patterns to the Rescue
 
 After some internal discussion, we settled on the classic undo implementation:
 the Command pattern. I first used the Command pattern in Java land, and although
 I respected its power, I dreaded the tedium of defining customized command
-classes, potentially one for every possible user action, each containing copies
-of the state necessary to reverse and repeat the action. As I thought about it,
-however, I realized that Javascript and its more straitlaced cousin Actionscript
-3 were well-suited to the pattern -- considerably more so than Java and C++,
-where the pattern accumulated its original mindshare.
+classes. In the traditional Command implementation, there might be one for every
+possible user action, each containing copies of the state necessary to reverse
+and repeat the action. As I thought about it, however, I realized that
+Javascript and its more straitlaced cousin Actionscript 3 were well-suited to
+the pattern -- considerably more so than Java and C++, where the pattern
+accumulated its original mindshare.
 
 ## Commands for Controls
 
